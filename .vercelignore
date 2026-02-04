@@ -1,0 +1,13 @@
+# Ignore backend files for Vercel (Frontend Only)
+api/
+src/
+scripts/
+tests/
+requirements.txt
+pyproject.toml
+poetry.lock
+.env
+.venv
+prophet-forecasting/
+Dockerfile
+docker-compose.yml
