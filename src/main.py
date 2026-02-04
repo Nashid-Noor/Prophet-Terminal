@@ -24,71 +24,76 @@ def run_optimisation(
     tickers: list[str],
     start_date: str = START_DATE,
     end_date: str = END_DATE,
+    risk_aversion: float | None = None,
+    min_allocation: float | None = None,
+    max_allocation: float | None = None,
+    prophet_params: dict | None = None,
 ) -> dict[str, Any]:
     """
     Run portfolio optimisation: pull data, predict, calculate allocation, and log result.
 
     Args:
         tickers: List of stock ticker symbols
-        start_date: Start date for historical data (YYYY-MM-DD format). Defaults to START_DATE.
-        end_date: End date for historical data (YYYY-MM-DD format). Defaults to END_DATE.
-
-    Returns:
-        Dictionary containing optimisation results with keys:
-        - date: date object representing date optimisation was run
-        - prediction_date: date object for the prediction (next day after last historical date)
-        - predictions: dict[str, float] of predicted prices for each ticker
-        - current_prices: dict[str, float] of current prices for each ticker
-        - predicted_returns: dict[str, float] of predicted returns for each ticker
-        - weights: dict[str, float] of optimal portfolio weights for each ticker
-
-    Returns empty dict if data extraction fails.
+        start_date: Start date for historical data
+        end_date: End date for historical data
+        risk_aversion: Optional override for risk aversion
+        min_allocation: Optional override for min allocation
+        max_allocation: Optional override for max allocation
+        prophet_params: Optional override for Prophet params (seasonality)
     """
 
     as_of_date = pd.to_datetime(end_date).date()
-    logger.info(f"Starting portfolio optimisation for tickers: {tickers} as of {as_of_date}")
+    logger.info(f"Running optimization for {len(tickers)} tickers as of {as_of_date}")
+    
+    # Log config overrides
+    if risk_aversion: logger.info(f"Override: Risk Aversion = {risk_aversion}")
+    if min_allocation: logger.info(f"Override: Min Allocation = {min_allocation}")
+    if prophet_params: logger.info(f"Override: Prophet Params = {prophet_params}")
 
-    # 1. Extract historical data
-    logger.info("Extracting historical data...")
+    # -- Data Extraction & Prep --
     all_stock_data = extract_data(tickers, start_date=start_date, end_date=end_date)
     if not all_stock_data:
-        logger.warning("No data extracted. Exiting optimisation.")
+        logger.warning("No data extracted. Exiting.")
         return {}
 
-    # 2. Preprocess historical data
-    logger.info("Preprocessing data...")
     portfolio_data = preprocess_data(all_stock_data)
 
-    # 3. Predict next step using Prophet
-    logger.info("Generating predictions...")
+    # -- Forecasting (Prophet) --
+    logger.info("Generating price forecasts...")
     model = ProphetModel()
-    predictions, predicted_returns = model.predict_for_tickers(portfolio_data)
+    predictions, predicted_returns = model.predict_for_tickers(
+        portfolio_data,
+        prophet_params=prophet_params
+    )
 
-    # 4. Collect actual price history for the past month
+    # Capture recent history for context
     actual_prices_last_month = collect_recent_prices(portfolio_data)
 
-    # 5. Append predictions to historical data
+    # Merge predictions for the optimizer
     predicted_data = append_predictions(portfolio_data, predictions, predicted_returns)
 
-    # 6. Optimise portfolio using predicted returns as expected returns
-    logger.info("Calculating optimal portfolio allocation...")
-    weights_dict = optimize_portfolio_mean_variance(predicted_data)
+    # -- Optimization (Markowitz) --
+    logger.info("Calculating optimal weights...")
+    
+    opt_kwargs = {}
+    if risk_aversion is not None: opt_kwargs['risk_aversion'] = risk_aversion
+    if min_allocation is not None: opt_kwargs['minimum_allocation'] = min_allocation
+    if max_allocation is not None: opt_kwargs['maximum_allocation'] = max_allocation
 
-    # 7. Log results
-    logger.info("Portfolio Optimisation Results")
-    logger.info(f"Date: {as_of_date}")
+    weights_dict = optimize_portfolio_mean_variance(predicted_data, **opt_kwargs)
 
-    logger.info("\nPredicted Prices (Next Day):")
+    # -- Reporting --
+    logger.info("--- Results ---")
+    logger.info(f"Forecast Date: {as_of_date}")
+
+    logger.info("Next Day Price Targets:")
     for ticker, price in predictions.items():
-        logger.info(f"  {ticker}: ${price:.2f}")
+        logger.info(f"  {ticker:<5} ${price:.2f}")
 
-    logger.info("\nPredicted Returns:")
-    for ticker, ret in predicted_returns.items():
-        logger.info(f"  {ticker}: {ret * 100:.2f}%")
-
-    logger.info("\nOptimal Portfolio Weights:")
+    logger.info("Target Allocation:")
     for ticker, weight in weights_dict.items():
-        logger.info(f"  {ticker}: {weight * 100:.2f}%")
+        if weight > 0.001: # Only log meaningful weights
+            logger.info(f"  {ticker:<5} {weight * 100:.1f}%")
 
     return {
         "date": as_of_date,

@@ -37,22 +37,28 @@ def _process_ticker_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 def _extract_single_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame | None:
     """
     Extract and process data for a single ticker.
-
-    Args:
-        ticker: Stock ticker symbol
-        start_date: Start date for data download (YYYY-MM-DD format)
-        end_date: End date for data download (YYYY-MM-DD format)
-
-    Returns:
-        Processed DataFrame or None if extraction fails
+    Tries the raw ticker first, then auto-appends '.NS' (NSE India) if no data found.
     """
     try:
+        # 1. Try exact match (e.g., US stocks or user already provided extension)
         stock = yf.Ticker(ticker)
         df = stock.history(start=start_date, end=end_date)
+        
+        # 2. If empty, try appending .NS (Indian NSE)
+        if df.empty and not ticker.endswith(".NS"):
+            ticker_ns = f"{ticker}.NS"
+            logger.info(f"No data for '{ticker}', trying '{ticker_ns}'...")
+            stock_ns = yf.Ticker(ticker_ns)
+            df_ns = stock_ns.history(start=start_date, end=end_date)
+            
+            if not df_ns.empty:
+                logger.info(f"Found data for '{ticker_ns}'")
+                df = df_ns
+
         df_processed = _process_ticker_dataframe(df)
 
         if df.empty:
-            logger.warning(f"No data available for ticker: {ticker}")
+            logger.warning(f"No data available for ticker: {ticker} (or .NS variant)")
             return None
 
         return df_processed

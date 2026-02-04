@@ -95,12 +95,13 @@ class ProphetModel:
         """Initialise Prophet model."""
         self.model: Prophet | None = None
 
-    def fit(self, price_series: pd.Series) -> ProphetModel:
+    def fit(self, price_series: pd.Series, prophet_params_override: dict | None = None) -> ProphetModel:
         """
-        Fit Prophet model to price series with trading holidays.
+        Fit Prophet model to price series with trading holidays and custom params.
 
         Args:
             price_series: Historical price series with datetime index
+            prophet_params_override: Optional dict to override seasonality settings (e.g. {'yearly_seasonality': False})
 
         Returns:
             Self (ProphetModel instance) for method chaining
@@ -127,31 +128,37 @@ class ProphetModel:
         ]
 
         # Initialise Prophet with holidays and seasonality
-        prophet_params = PROPHET_PARAMS.copy()
+        # Start with defaults from settings.py
+        final_params = PROPHET_PARAMS.copy()
+        
+        # Override with any custom settings passed in
+        if prophet_params_override:
+            final_params.update(prophet_params_override)
 
         if not holidays.empty:
-            prophet_params["holidays"] = holidays
+            final_params["holidays"] = holidays
             logger.info(f"Using {len(holidays)} trading holidays for Prophet model")
         else:
             logger.warning("No holidays found for date range, using Prophet without holidays")
 
-        self.model = Prophet(**prophet_params)
+        self.model = Prophet(**final_params)
         self.model.fit(df)
 
         return self
 
-    def predict_next(self, price_series: pd.Series) -> float:
+    def predict_next(self, price_series: pd.Series, prophet_params: dict | None = None) -> float:
         """
         Fit model and predict next day's price in one step.
 
         Args:
             price_series: Historical price series including current day
+            prophet_params: Optional dict to override seasonality settings
 
         Returns:
             Predicted price for next day
         """
 
-        self.fit(price_series)
+        self.fit(price_series, prophet_params_override=prophet_params)
 
         # Get the last date from the series
         last_date = price_series.index[-1]
@@ -169,12 +176,14 @@ class ProphetModel:
     def predict_for_tickers(
         self,
         portfolio_data: dict[str, pd.DataFrame],
+        prophet_params: dict | None = None,
     ) -> tuple[dict[str, float], dict[str, float]]:
         """
         Predict prices and returns for multiple tickers.
 
         Args:
             portfolio_data: Dictionary mapping ticker to DataFrame with 'Price' column
+            prophet_params: Optional dict to override seasonality settings
 
         Returns:
             Tuple containing:
@@ -194,7 +203,7 @@ class ProphetModel:
             current_prices[ticker] = current_price
 
             # Predict next day price
-            predicted_price = self.predict_next(df_stock["Price"])
+            predicted_price = self.predict_next(df_stock["Price"], prophet_params=prophet_params)
             predictions[ticker] = predicted_price
 
             # Calculate predicted return

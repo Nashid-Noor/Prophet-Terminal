@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic
+numpy
+pandas
+scipy
+yfinance
+scikit-learn
+prophet
+python-multipart
+requests
+pandas_market_calendars
+plotly
+matplotlib
+

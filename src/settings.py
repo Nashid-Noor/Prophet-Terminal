@@ -1,5 +1,8 @@
 """Settings and constants for portfolio optimisation."""
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Risk parameters
 MINIMUM_ALLOCATION = 0.05  # Minimum allocation per asset (5%)
@@ -28,6 +31,9 @@ PORTFOLIO_TICKERS = [
 
 # Database
 SUPABASE_TABLE_NAME = "stock_optimisation_store"
+import os
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 
 # Holiday name mapping for Prophet model
 HOLIDAY_NAME_MAP = {

@@ -12,20 +12,17 @@ def calculate_mean_variance(
     lookback_days: int = 252,  # ~1 year of trading days
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
-    Calculate mean returns and covariance matrix from Returns columns.
-
-    Uses only the last N trading days (default: 252 days / ~1 year) of data.
+    Computes the risk/return profile (mean returns & covariance matrix) for the portfolio.
+    
+    Defaults to a 1-year lookback (252 trading days) to capture recent market regimes 
+    while smoothing out short-term noise.
 
     Args:
-        data_dict: Dictionary where each key is a ticker symbol and each value
-            is a DataFrame containing at least a "Returns" column representing
-            periodic returns for that asset.
-        lookback_days: Number of trading days to look back (default: 252)
+        data_dict: Map of Ticker -> DataFrame (must contain 'Returns' column).
+        lookback_days: Trading days to include in the calculation (default: 252).
 
     Returns:
-        Tuple containing:
-        - mean_returns: pd.Series of mean returns for each ticker, indexed by ticker
-        - cov_matrix: pd.DataFrame covariance matrix of returns across all tickers
+        (mean_returns, cov_matrix) tuple for Markowitz optimization.
     """
     # For each ticker, take the last N days
     filtered_data = {}
@@ -55,32 +52,23 @@ def optimize_portfolio_mean_variance(
     risk_aversion: float = RISK_AVERSION,
 ) -> dict[str, float]:
     """
-    Optimise portfolio using mean-variance (maximise return - risk_penalty).
-
-    Args:
-        data_dict: Dictionary of DataFrames with 'Returns' column
-        minimum_allocation: Minimum allocation for each asset (default: MINIMUM_ALLOCATION)
-        maximum_allocation: Maximum allocation for each asset (default: MAXIMUM_ALLOCATION)
-        risk_aversion: Risk-aversion coefficient (lambda) (default: RISK_AVERSION)
-
-    Returns:
-        Dictionary mapping ticker to optimal weight, where weights sum to 1.0
-
-    Raises:
-        ValueError: If optimisation fails
+    Solves the Mean-Variance Optimization problem to find optimal asset weights.
+    
+    Objective: Maximize (Returns - Risk_Penalty)
+    Where Risk_Penalty = 0.5 * risk_aversion * Portfolio_Variance
     """
     mu, cov = calculate_mean_variance(data_dict)
     tickers = list(data_dict.keys())
     num_assets = len(tickers)
 
-    # Objective: maximise return - (lambda/2) * variance
-    # minimise negative of it
+    # Maximize Utility: R - (λ/2) * σ²
+    # We minimize the negative: -R + (λ/2) * σ²
     def objective(weights: np.ndarray) -> float:
         port_return = float(np.dot(weights, mu))
         port_var = float(np.dot(weights.T, np.dot(cov, weights)))
         return -(port_return - 0.5 * risk_aversion * port_var)
 
-    # Constraint: sum(weights) == 1
+    # Fully invested constraint: sum(weights) = 1
     constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1}]
 
     # Bounds: enforce minimum allocation per asset
