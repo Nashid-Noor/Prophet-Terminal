@@ -1,5 +1,6 @@
 """Data extraction module for fetching stock data from yfinance."""
 
+from typing import Optional
 import logging
 
 import pandas as pd
@@ -34,7 +35,7 @@ def _process_ticker_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _extract_single_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+def _extract_single_ticker_data(ticker: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
     """
     Extract and process data for a single ticker.
     Tries the raw ticker first, then auto-appends '.NS' (NSE India) if no data found.
