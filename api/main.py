@@ -16,6 +16,11 @@ app.add_middleware(
 def health_check():
     return {"status": "ok", "message": "API is running"}
 
+@app.get("/")
+def root():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+
 # Import routers
 # Import routers
 from api.routers import optimization, historical, market, accuracy
